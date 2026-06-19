@@ -8,8 +8,8 @@
 // =====================================================================
 
 export const syncConfig = {
-  url: '', // ex: 'https://script.google.com/macros/s/AKfy.../exec'
-  secret: '' // mesmo valor de SECRET no Code.gs (pode ficar vazio)
+  url: 'https://script.google.com/macros/s/AKfycbxDV5BhMXW93NHrK5zk6d3rvTR429TmqMZ-8fnhraV_ld0JSpO5NDlxKUp8TWu76-VLOQ/exec', // ex: 'https://script.google.com/macros/s/AKfy.../exec'
+  secret: 'AMSL' // mesmo valor de SECRET no Code.gs (pode ficar vazio)
 }
 
 export const syncEnabled = () => Boolean(syncConfig.url)
