@@ -46,6 +46,13 @@ export const initialState = {
     { id: 'd1', date: '2026-02-20', type: 'dividendo', value: 0.35 },
     { id: 'd2', date: '2026-05-12', type: 'jcp', value: 0.28 }
   ],
+  // Alvos de preço (ordens automáticas) por cenário. Cada ordem:
+  // { id, type:'buy'|'sell', qty, target, condition:'lte'|'gte',
+  //   createdAt, status:'pending'|'filled'|'canceled', filledAt, filledPrice }
+  orders: {
+    nat: [],
+    ang: []
+  },
   quote: null, // { price, currency, time, updatedAt }
   priceHistory: [], // [{ date, price }] mesclado de API + manual
   // Registro de auditoria (backup imutável). Cada entrada:

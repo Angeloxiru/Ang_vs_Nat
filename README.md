@@ -146,6 +146,32 @@ No **celular**, um banner sugere **"Instalar na tela inicial"**:
 - Android/Chrome: botão **Instalar** (via `beforeinstallprompt`).
 - iOS/Safari: instrução para **Compartilhar → Adicionar à Tela de Início**.
 
+## 🎯 Alvos de preço e execução automática
+
+Cada jogador cadastra faixas de compra/venda (quantidade + preço-alvo + gatilho
+`≤`/`≥`). Quando a cotação atinge o alvo, o sistema executa **ao preço-alvo** e
+só se houver caixa/ações; senão a ordem segue pendente. Há dois executores:
+
+- **No app (instantâneo):** avalia os alvos quando o preço é atualizado (botão
+  Atualizar, ao abrir e ao sincronizar).
+- **Robô em segundo plano (GitHub Actions):** em dias úteis, das 10:00 às 17:00
+  (BRT), **a cada 15 minutos** — executa mesmo com todos os apps fechados.
+
+### Configurar o robô
+
+1. Requer o backend Google Sheets configurado (ver acima).
+2. Em **Settings → Secrets and variables → Actions → New repository secret**:
+   - `SHEET_SECRET`: o mesmo `SECRET` do `Code.gs` (se você definiu).
+   - `SHEET_URL` *(opcional)*: sobrescreve a URL do `src/syncConfig.js`.
+3. O workflow [`.github/workflows/orders.yml`](.github/workflows/orders.yml) roda
+   sozinho no horário; dá para disparar manualmente em **Actions → Executar alvos
+   de preço → Run workflow**.
+
+> Intervalo recomendado: **15 min** — a cotação da B3 (Yahoo) já tem ~15 min de
+> atraso e o cron do GitHub tem mínimo de 5 min (e pode atrasar). Ajuste o `cron`
+> no workflow se quiser. Workflows agendados podem ser desativados após ~60 dias
+> sem atividade no repositório (o GitHub avisa por e-mail; basta reativar).
+
 ## 📈 Cotação ISAE4
 
 Busca via Yahoo Finance (`ISAE4.SA`) usando proxies CORS de fallback. Se a
