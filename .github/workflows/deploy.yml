@@ -29,8 +29,12 @@ jobs:
         with:
           path: dist
 
+  # O deploy só roda na branch padrão (main). Em branches de PR, apenas o
+  # job "build" valida o projeto — o ambiente github-pages bloqueia deploy
+  # fora da main por proteção de ambiente.
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
