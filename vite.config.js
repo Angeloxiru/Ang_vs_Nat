@@ -1,12 +1,32 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'node:child_process'
+import { writeFileSync, mkdirSync } from 'node:fs'
+
+// Versão da app atrelada ao commit do GitHub. Gerada no build (também no CI),
+// gravada em public/version.json (servido junto com o site) e embutida no
+// bundle via define, para o app comparar "rodando vs publicado".
+const version = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim()
+  } catch {
+    return 'dev-' + Date.now()
+  }
+})()
+const builtAt = new Date().toISOString()
+mkdirSync('public', { recursive: true })
+writeFileSync('public/version.json', JSON.stringify({ version, builtAt }) + '\n')
 
 // base relativo ('./') funciona tanto em GitHub Pages (subdiretório do repo)
 // quanto em qualquer outro host estático. Como usamos HashRouter, o roteamento
 // não depende do caminho base.
 export default defineConfig({
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+    __BUILT_AT__: JSON.stringify(builtAt)
+  },
   plugins: [
     react(),
     VitePWA({
@@ -29,8 +49,14 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // version.json nunca é pré-cacheado: precisa refletir sempre o publicado.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globIgnores: ['**/version.json'],
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith('version.json'),
+            handler: 'NetworkOnly'
+          },
           {
             urlPattern: ({ url }) => url.href.includes('finance.yahoo.com') || url.href.includes('allorigins'),
             handler: 'NetworkFirst',

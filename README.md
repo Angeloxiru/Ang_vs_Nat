@@ -126,6 +126,26 @@ Admin tem botões para puxar/enviar/testar a conexão.
 A página de Configurações também tem **Exportar/Importar JSON** e **exportar a
 auditoria em CSV**, úteis mesmo sem o backend.
 
+## 🔄 Versionamento e auto-update
+
+Cada build gera `version.json` com o **hash do commit** (atrelado ao GitHub) e
+embute a mesma versão no bundle. Ao abrir o site/PWA (e ao focar a aba), o app
+compara a versão **rodando** com a **publicada**:
+
+- se houver deploy novo, ele **limpa caches/service worker e recarrega
+  automaticamente** na versão correta (uma vez por sessão, sem loop);
+- se o auto-update não aplicar (ex.: cache de CDN atrasado), aparece um banner
+  **"Nova versão disponível → Atualizar"**.
+
+A versão atual fica visível no rodapé da página de Configurações.
+
+## 📲 Instalação como PWA
+
+No **celular**, um banner sugere **"Instalar na tela inicial"**:
+
+- Android/Chrome: botão **Instalar** (via `beforeinstallprompt`).
+- iOS/Safari: instrução para **Compartilhar → Adicionar à Tela de Início**.
+
 ## 📈 Cotação ISAE4
 
 Busca via Yahoo Finance (`ISAE4.SA`) usando proxies CORS de fallback. Se a

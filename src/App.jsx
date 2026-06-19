@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom'
 import { useStore, hydrateFromRemote } from './lib/store'
 import Layout from './components/Layout'
@@ -6,6 +6,9 @@ import Demo from './pages/Demo'
 import Trader from './pages/Trader'
 import Config from './pages/Config'
 import { Toaster } from './components/Toast'
+import InstallPrompt from './components/InstallPrompt'
+import UpdateBanner from './components/UpdateBanner'
+import { ensureLatestVersion } from './lib/updates'
 
 // Compatibilidade com ?user=nat|ang|admin (redireciona para a rota de hash).
 function QueryRedirect() {
@@ -18,6 +21,15 @@ function QueryRedirect() {
 
 export default function App() {
   const theme = useStore((s) => s.theme)
+  const [updateVersion, setUpdateVersion] = useState(null)
+
+  // Checa a versão publicada no GitHub Pages na entrada e ao focar a aba.
+  useEffect(() => {
+    ensureLatestVersion(setUpdateVersion)
+    const onFocus = () => ensureLatestVersion(setUpdateVersion)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   useEffect(() => {
     const root = document.documentElement
@@ -46,6 +58,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      <UpdateBanner version={updateVersion} onClose={() => setUpdateVersion(null)} />
+      <InstallPrompt />
       <Toaster />
     </>
   )
