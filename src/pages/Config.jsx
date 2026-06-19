@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore, syncNow, hydrateFromRemote } from '../lib/store'
 import { syncConfig, syncEnabled } from '../syncConfig'
 import { pingRemote } from '../lib/remote'
+import { APP_VERSION } from '../lib/updates'
 import { SCENARIO_META } from '../lib/initialData'
 import { toast } from '../components/Toast'
 import { brl, fmtDate, fmtDateTime, todayISO } from '../lib/format'
@@ -181,7 +182,10 @@ export default function Config() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold">⚙️ Configurações</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-xl font-bold">⚙️ Configurações</h1>
+        <span className="text-xs text-slate-400">versão {APP_VERSION}</span>
+      </div>
 
       <Section title="Parâmetros gerais">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
