@@ -1,10 +1,10 @@
 name: Executar alvos de preço
 
-# Em dias úteis, das 10:00 às 17:00 (BRT = UTC-3 -> 13:00-20:00 UTC),
-# a cada 15 minutos. Também pode ser disparado manualmente.
+# O agendamento automático agora é feito pelo Apps Script (gatilho de tempo),
+# que é confiável — ver google-apps-script/Code.gs (função runPriceTargets).
+# Este workflow fica como DISPARO MANUAL de backup (Actions > Run workflow).
+# O cron do GitHub foi removido por ser instável (atrasa/descarta execuções).
 on:
-  schedule:
-    - cron: '*/15 13-20 * * 1-5'
   workflow_dispatch:
 
 # Evita execuções concorrentes do robô.
