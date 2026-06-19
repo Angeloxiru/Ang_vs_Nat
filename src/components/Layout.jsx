@@ -1,5 +1,27 @@
 import { NavLink, Outlet, Link } from 'react-router-dom'
-import { useStore } from '../lib/store'
+import { useStore, hydrateFromRemote } from '../lib/store'
+
+function SyncBadge() {
+  const sync = useStore((s) => s.sync)
+  if (sync.status === 'off') return null
+  const map = {
+    idle: { c: 'bg-slate-400', t: 'Sync pronto' },
+    syncing: { c: 'bg-amber-400 animate-pulse', t: 'Sincronizando…' },
+    ok: { c: 'bg-emerald-500', t: 'Sincronizado' },
+    error: { c: 'bg-rose-500', t: 'Erro de sync' }
+  }
+  const s = map[sync.status] || map.idle
+  return (
+    <button
+      onClick={() => hydrateFromRemote()}
+      title={`${s.t}${sync.error ? ': ' + sync.error : ''} — clique para sincronizar`}
+      className="flex items-center gap-1.5 rounded-full bg-slate-200 px-2 py-1 text-xs font-medium dark:bg-slate-800"
+    >
+      <span className={`h-2 w-2 rounded-full ${s.c}`} />
+      <span className="hidden sm:inline">☁️</span>
+    </button>
+  )
+}
 
 const links = [
   { to: '/', label: 'Demonstração', icon: '📊', end: true },
@@ -46,6 +68,7 @@ export default function Layout() {
           {links.map((l) => (
             <NavItem key={l.to} {...l} />
           ))}
+          <SyncBadge />
           <button onClick={toggleTheme} className="btn-ghost ml-2 !px-3" title="Alternar tema">
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
@@ -58,9 +81,12 @@ export default function Layout() {
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white">I4</span>
           {ticker}
         </Link>
-        <button onClick={toggleTheme} className="btn-ghost !px-3" title="Alternar tema">
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
+        <div className="flex items-center gap-2">
+          <SyncBadge />
+          <button onClick={toggleTheme} className="btn-ghost !px-3" title="Alternar tema">
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 px-4 py-5 pb-24 sm:pb-8">

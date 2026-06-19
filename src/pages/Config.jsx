@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { useStore } from '../lib/store'
+import { useStore, syncNow, hydrateFromRemote } from '../lib/store'
+import { syncConfig, syncEnabled } from '../syncConfig'
+import { pingRemote } from '../lib/remote'
 import { SCENARIO_META } from '../lib/initialData'
 import { toast } from '../components/Toast'
 import { brl, fmtDate, fmtDateTime, todayISO } from '../lib/format'
@@ -112,6 +114,7 @@ export default function Config() {
   const priceHistory = useStore((s) => s.priceHistory)
   const transactions = useStore((s) => s.transactions)
   const auditLog = useStore((s) => s.auditLog)
+  const sync = useStore((s) => s.sync)
 
   const [dv, setDv] = useState({ date: todayISO(), type: 'dividendo', value: '' })
   const [manual, setManual] = useState({ date: todayISO(), price: '' })
@@ -398,6 +401,69 @@ export default function Config() {
             </tbody>
           </table>
         </div>
+      </Section>
+
+      <Section title="Sincronização (Google Sheets)">
+        {syncEnabled() ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    sync.status === 'ok'
+                      ? 'bg-emerald-500'
+                      : sync.status === 'syncing'
+                        ? 'bg-amber-400'
+                        : sync.status === 'error'
+                          ? 'bg-rose-500'
+                          : 'bg-slate-400'
+                  }`}
+                />
+                {sync.status === 'ok'
+                  ? 'Conectado'
+                  : sync.status === 'syncing'
+                    ? 'Sincronizando…'
+                    : sync.status === 'error'
+                      ? 'Erro'
+                      : 'Pronto'}
+              </span>
+              {sync.lastSync && (
+                <span className="text-xs text-slate-400">
+                  Último: {fmtDateTime(sync.lastSync)}
+                </span>
+              )}
+            </div>
+            {sync.error && <p className="text-xs text-rose-500">{sync.error}</p>}
+            <p className="break-all text-xs text-slate-400">Endpoint: {syncConfig.url}</p>
+            <div className="flex flex-wrap gap-3">
+              <button className="btn-ghost" onClick={() => hydrateFromRemote()}>
+                ⬇️ Puxar da planilha
+              </button>
+              <button className="btn-primary" onClick={() => syncNow()}>
+                ⬆️ Enviar para planilha
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={async () => {
+                  try {
+                    await pingRemote()
+                    toast('Conexão OK com o backend.')
+                  } catch (e) {
+                    toast('Falha na conexão: ' + (e.message || e), 'error')
+                  }
+                }}
+              >
+                🔌 Testar conexão
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-400">
+            Sync desativado (modo offline / localStorage). Para ativar, crie o Web App em{' '}
+            <code>google-apps-script/Code.gs</code> e preencha <code>src/syncConfig.js</code>. Veja o
+            README.
+          </p>
+        )}
       </Section>
 
       <Section title="Backup de dados">

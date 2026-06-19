@@ -96,10 +96,35 @@ O deploy é automático via GitHub Actions
 
 ## 💾 Dados e sincronização
 
-- Persistência local por navegador (`localStorage`, chave `isae4-app`).
-- **Backup / sincronização entre dispositivos**: use **Exportar/Importar JSON**
-  na página de Configurações.
-- Há **dados mock iniciais** para visualizar a app já populada.
+A app é **local-first**: funciona offline com `localStorage` (chave `isae4-app`)
+e há **dados mock iniciais**. Opcionalmente, pode usar uma **Planilha Google como
+backend compartilhado** (sincroniza Nat, Ang e Admin entre dispositivos).
+
+### Backend opcional: Google Sheets + Apps Script
+
+1. Crie uma **Planilha Google** (será o banco de dados).
+2. Nela: **Extensões → Apps Script**, apague tudo e cole
+   [`google-apps-script/Code.gs`](google-apps-script/Code.gs).
+3. (Recomendado) Defina um `SECRET` no topo do script.
+4. **Implantar → Nova implantação → App da Web**: executar como *Eu mesmo*,
+   acesso para *Qualquer pessoa*. Copie a URL terminada em `/exec`.
+5. Preencha [`src/syncConfig.js`](src/syncConfig.js) com a `url` e o `secret`,
+   faça commit e deixe o GitHub Actions redeployar.
+
+Com isso o app **carrega o estado da planilha ao abrir** e **salva
+automaticamente** a cada mudança (com debounce). A planilha mantém abas legíveis
+(`Transacoes`, `Proventos`) e um log **`Auditoria`** append-only para
+conferência. Um indicador ☁️ no cabeçalho mostra o status do sync; o painel
+Admin tem botões para puxar/enviar/testar a conexão.
+
+> Segurança: a URL do Web App é pública; o `SECRET` reduz abuso, mas não é
+> autenticação forte. Como nenhum token do repositório de código é exposto, o
+> risco fica restrito aos dados do jogo. Mantenha URL e segredo dentro do grupo.
+
+### Backup manual
+
+A página de Configurações também tem **Exportar/Importar JSON** e **exportar a
+auditoria em CSV**, úteis mesmo sem o backend.
 
 ## 📈 Cotação ISAE4
 

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { initialState } from './initialData'
+import { loadRemote, saveRemote } from './remote'
+import { syncEnabled } from '../syncConfig'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -23,6 +25,10 @@ export const useStore = create(
   persist(
     (set, get) => ({
       ...initialState,
+
+      // Estado de sincronização (não persistido)
+      sync: { status: syncEnabled() ? 'idle' : 'off', lastSync: null, error: null },
+      setSync: (patch) => set((s) => ({ sync: { ...s.sync, ...patch } })),
 
       // ---- Configurações gerais ----
       setConfig: (patch) => set((s) => ({ config: { ...s.config, ...patch } })),
@@ -176,3 +182,57 @@ export function usePriceAt() {
 export function currentPrice(state) {
   return state.quote?.price ?? state.config.initialPrice
 }
+
+// =====================================================================
+// Sincronização com o backend (Google Sheets). Quando configurado:
+//  - hydrateFromRemote(): carrega o estado da planilha ao abrir o app.
+//  - autosave: a cada alteração nos dados, envia o estado (debounce).
+// O guard `hydrating` evita eco (a hidratação não dispara novo save).
+// =====================================================================
+let hydrating = false
+let saveTimer = null
+
+async function pushRemote() {
+  const s = useStore.getState()
+  if (!syncEnabled()) return
+  s.setSync({ status: 'syncing', error: null })
+  try {
+    const payload = JSON.parse(s.exportData())
+    await saveRemote(payload)
+    s.setSync({ status: 'ok', lastSync: new Date().toISOString(), error: null })
+  } catch (e) {
+    s.setSync({ status: 'error', error: String(e.message || e) })
+  }
+}
+
+export async function hydrateFromRemote() {
+  if (!syncEnabled()) return
+  const s = useStore.getState()
+  s.setSync({ status: 'syncing', error: null })
+  hydrating = true
+  try {
+    const remote = await loadRemote()
+    if (remote && remote.config) s.importData(remote)
+    s.setSync({ status: 'ok', lastSync: new Date().toISOString(), error: null })
+  } catch (e) {
+    s.setSync({ status: 'error', error: String(e.message || e) })
+  } finally {
+    setTimeout(() => {
+      hydrating = false
+    }, 400)
+  }
+}
+
+export function syncNow() {
+  return pushRemote()
+}
+
+// Auto-save: observa as fatias de dados e envia ao remoto com debounce.
+const DATA_KEYS = ['config', 'profiles', 'transactions', 'dividends', 'priceHistory', 'auditLog']
+useStore.subscribe((state, prev) => {
+  if (!syncEnabled() || hydrating) return
+  const changed = DATA_KEYS.some((k) => state[k] !== prev[k])
+  if (!changed) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(pushRemote, 1200)
+})
