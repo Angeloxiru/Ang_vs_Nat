@@ -4,6 +4,16 @@ import { initialState } from './initialData'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
+const auditEntry = (actor, action, scenario, kind, data) => ({
+  id: uid(),
+  ts: new Date().toISOString(),
+  actor,
+  action,
+  scenario,
+  kind,
+  data
+})
+
 // Constrói um mapa ordenado de preços a partir do histórico para lookup rápido.
 function sortedHistory(history) {
   return [...(history || [])].sort((a, b) => a.date.localeCompare(b.date))
@@ -22,31 +32,60 @@ export const useStore = create(
         set((s) => ({ profiles: { ...s.profiles, [who]: { ...s.profiles[who], ...patch } } })),
 
       // ---- Transações (impactam apenas o cenário informado) ----
+      // Toda adição/edição/exclusão é registrada no auditLog para conferência.
       addTransaction: (who, tx) =>
-        set((s) => ({
-          transactions: {
-            ...s.transactions,
-            [who]: [...(s.transactions[who] || []), { id: uid(), ...tx }]
+        set((s) => {
+          const record = { id: uid(), ...tx }
+          return {
+            transactions: { ...s.transactions, [who]: [...(s.transactions[who] || []), record] },
+            auditLog: [...s.auditLog, auditEntry(who, 'add', who, 'transaction', record)]
           }
-        })),
-      updateTransaction: (who, id, patch) =>
-        set((s) => ({
-          transactions: {
-            ...s.transactions,
-            [who]: (s.transactions[who] || []).map((t) => (t.id === id ? { ...t, ...patch } : t))
+        }),
+      updateTransaction: (who, id, patch, actor = 'admin') =>
+        set((s) => {
+          const before = (s.transactions[who] || []).find((t) => t.id === id)
+          return {
+            transactions: {
+              ...s.transactions,
+              [who]: (s.transactions[who] || []).map((t) => (t.id === id ? { ...t, ...patch } : t))
+            },
+            auditLog: [...s.auditLog, auditEntry(actor, 'edit', who, 'transaction', { before, patch })]
           }
-        })),
-      removeTransaction: (who, id) =>
-        set((s) => ({
-          transactions: {
-            ...s.transactions,
-            [who]: (s.transactions[who] || []).filter((t) => t.id !== id)
+        }),
+      // Exclusão é uma ação administrativa (jogadores não excluem).
+      removeTransaction: (who, id, actor = 'admin') =>
+        set((s) => {
+          const removed = (s.transactions[who] || []).find((t) => t.id === id)
+          return {
+            transactions: {
+              ...s.transactions,
+              [who]: (s.transactions[who] || []).filter((t) => t.id !== id)
+            },
+            auditLog: removed
+              ? [...s.auditLog, auditEntry(actor, 'remove', who, 'transaction', removed)]
+              : s.auditLog
           }
-        })),
+        }),
 
       // ---- Proventos ----
-      addDividend: (dv) => set((s) => ({ dividends: [...s.dividends, { id: uid(), ...dv }] })),
-      removeDividend: (id) => set((s) => ({ dividends: s.dividends.filter((d) => d.id !== id) })),
+      addDividend: (dv) =>
+        set((s) => {
+          const record = { id: uid(), ...dv }
+          return {
+            dividends: [...s.dividends, record],
+            auditLog: [...s.auditLog, auditEntry('admin', 'add', 'todos', 'dividend', record)]
+          }
+        }),
+      removeDividend: (id) =>
+        set((s) => {
+          const removed = s.dividends.find((d) => d.id === id)
+          return {
+            dividends: s.dividends.filter((d) => d.id !== id),
+            auditLog: removed
+              ? [...s.auditLog, auditEntry('admin', 'remove', 'todos', 'dividend', removed)]
+              : s.auditLog
+          }
+        }),
 
       // ---- Cotação / histórico de preços ----
       setQuote: (quote) => set(() => ({ quote: { ...quote, updatedAt: new Date().toISOString() } })),
@@ -77,7 +116,8 @@ export const useStore = create(
             profiles: s.profiles,
             transactions: s.transactions,
             dividends: s.dividends,
-            priceHistory: s.priceHistory
+            priceHistory: s.priceHistory,
+            auditLog: s.auditLog
           },
           null,
           2
@@ -90,7 +130,8 @@ export const useStore = create(
           profiles: { ...s.profiles, ...(data.profiles || {}) },
           transactions: { ...s.transactions, ...(data.transactions || {}) },
           dividends: data.dividends || s.dividends,
-          priceHistory: data.priceHistory || s.priceHistory
+          priceHistory: data.priceHistory || s.priceHistory,
+          auditLog: data.auditLog || s.auditLog
         }))
       },
       resetData: () => set(() => ({ ...initialState }))
@@ -105,6 +146,7 @@ export const useStore = create(
         dividends: s.dividends,
         quote: s.quote,
         priceHistory: s.priceHistory,
+        auditLog: s.auditLog,
         theme: s.theme
       })
     }

@@ -17,13 +17,17 @@ cenário **passivo (Buffet / buy & hold)**.
   atual de ISAE4 via API com botão **Atualizar**; tabela de transações.
 - **Página Nat** e **Página Ang**: formulário de compra/venda (data, quantidade,
   preço) com **validação** (não vende mais do que tem, não compra sem caixa),
-  histórico com exclusão, resumo da carteira e gráfico comparando com o Buffet.
-  As alterações de cada uma impactam **apenas o próprio cenário**.
+  histórico (somente leitura), resumo da carteira e gráfico comparando com o
+  Buffet. As alterações de cada uma impactam **apenas o próprio cenário**.
+  Os jogadores **não podem excluir** operações — toda movimentação é definitiva
+  e fica registrada na auditoria.
 - **Configurações (Admin)**: protegida por senha simples. Cadastro de
   **proventos (Dividendos/JCP)**, **perfis** (nome, foto, descrição, tese),
   **parâmetros gerais** (ticker, capital inicial, taxa RF, data inicial, preço
-  inicial), histórico de **cotações manuais** (fallback da API) e
-  **export/import** de dados em JSON.
+  inicial), histórico de **cotações manuais** (fallback da API),
+  **gerenciamento de movimentações** (exclusão restrita ao admin),
+  **registro de auditoria** (backup imutável de adições/exclusões, com export
+  CSV) e **export/import** de dados em JSON.
 
 ## 🧮 Regras de negócio
 

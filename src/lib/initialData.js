@@ -48,5 +48,8 @@ export const initialState = {
   ],
   quote: null, // { price, currency, time, updatedAt }
   priceHistory: [], // [{ date, price }] mesclado de API + manual
+  // Registro de auditoria (backup imutável). Cada entrada:
+  // { id, ts, actor, action: 'add'|'remove'|'edit', scenario, kind, data }
+  auditLog: [],
   theme: 'dark'
 }

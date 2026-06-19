@@ -111,7 +111,12 @@ export default function Trader({ who }) {
 
       {/* Lista */}
       <section className="card">
-        <h2 className="mb-3 font-semibold">Histórico de {meta.label}</h2>
+        <h2 className="mb-1 font-semibold">Histórico de {meta.label}</h2>
+        <p className="mb-3 text-xs text-slate-400">
+          🔒 As operações registradas são permanentes e não podem ser excluídas por aqui. Toda
+          movimentação fica gravada no registro de auditoria. Em caso de erro, fale com o
+          administrador.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase text-slate-400">
@@ -121,7 +126,6 @@ export default function Trader({ who }) {
                 <th className="text-right">Qtd</th>
                 <th className="text-right">Preço</th>
                 <th className="text-right">Total</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -134,22 +138,11 @@ export default function Trader({ who }) {
                   <td className="text-right">{t.qty}</td>
                   <td className="text-right">{brl(t.price)}</td>
                   <td className="text-right">{brl(t.qty * t.price)}</td>
-                  <td className="text-right">
-                    <button
-                      className="text-rose-500 hover:underline"
-                      onClick={() => {
-                        store.removeTransaction(who, t.id)
-                        toast('Operação removida.', 'info')
-                      }}
-                    >
-                      excluir
-                    </button>
-                  </td>
                 </tr>
               ))}
               {sorted.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-slate-400">
+                  <td colSpan={5} className="py-4 text-center text-slate-400">
                     Nenhuma operação registrada.
                   </td>
                 </tr>
