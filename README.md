@@ -17,13 +17,17 @@ cenário **passivo (Buffet / buy & hold)**.
   atual de ISAE4 via API com botão **Atualizar**; tabela de transações.
 - **Página Nat** e **Página Ang**: formulário de compra/venda (data, quantidade,
   preço) com **validação** (não vende mais do que tem, não compra sem caixa),
-  histórico com exclusão, resumo da carteira e gráfico comparando com o Buffet.
-  As alterações de cada uma impactam **apenas o próprio cenário**.
+  histórico (somente leitura), resumo da carteira e gráfico comparando com o
+  Buffet. As alterações de cada uma impactam **apenas o próprio cenário**.
+  Os jogadores **não podem excluir** operações — toda movimentação é definitiva
+  e fica registrada na auditoria.
 - **Configurações (Admin)**: protegida por senha simples. Cadastro de
   **proventos (Dividendos/JCP)**, **perfis** (nome, foto, descrição, tese),
   **parâmetros gerais** (ticker, capital inicial, taxa RF, data inicial, preço
-  inicial), histórico de **cotações manuais** (fallback da API) e
-  **export/import** de dados em JSON.
+  inicial), histórico de **cotações manuais** (fallback da API),
+  **gerenciamento de movimentações** (exclusão restrita ao admin),
+  **registro de auditoria** (backup imutável de adições/exclusões, com export
+  CSV) e **export/import** de dados em JSON.
 
 ## 🧮 Regras de negócio
 
@@ -92,10 +96,35 @@ O deploy é automático via GitHub Actions
 
 ## 💾 Dados e sincronização
 
-- Persistência local por navegador (`localStorage`, chave `isae4-app`).
-- **Backup / sincronização entre dispositivos**: use **Exportar/Importar JSON**
-  na página de Configurações.
-- Há **dados mock iniciais** para visualizar a app já populada.
+A app é **local-first**: funciona offline com `localStorage` (chave `isae4-app`)
+e há **dados mock iniciais**. Opcionalmente, pode usar uma **Planilha Google como
+backend compartilhado** (sincroniza Nat, Ang e Admin entre dispositivos).
+
+### Backend opcional: Google Sheets + Apps Script
+
+1. Crie uma **Planilha Google** (será o banco de dados).
+2. Nela: **Extensões → Apps Script**, apague tudo e cole
+   [`google-apps-script/Code.gs`](google-apps-script/Code.gs).
+3. (Recomendado) Defina um `SECRET` no topo do script.
+4. **Implantar → Nova implantação → App da Web**: executar como *Eu mesmo*,
+   acesso para *Qualquer pessoa*. Copie a URL terminada em `/exec`.
+5. Preencha [`src/syncConfig.js`](src/syncConfig.js) com a `url` e o `secret`,
+   faça commit e deixe o GitHub Actions redeployar.
+
+Com isso o app **carrega o estado da planilha ao abrir** e **salva
+automaticamente** a cada mudança (com debounce). A planilha mantém abas legíveis
+(`Transacoes`, `Proventos`) e um log **`Auditoria`** append-only para
+conferência. Um indicador ☁️ no cabeçalho mostra o status do sync; o painel
+Admin tem botões para puxar/enviar/testar a conexão.
+
+> Segurança: a URL do Web App é pública; o `SECRET` reduz abuso, mas não é
+> autenticação forte. Como nenhum token do repositório de código é exposto, o
+> risco fica restrito aos dados do jogo. Mantenha URL e segredo dentro do grupo.
+
+### Backup manual
+
+A página de Configurações também tem **Exportar/Importar JSON** e **exportar a
+auditoria em CSV**, úteis mesmo sem o backend.
 
 ## 📈 Cotação ISAE4
 

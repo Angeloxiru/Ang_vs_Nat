@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom'
-import { useStore } from './lib/store'
+import { useStore, hydrateFromRemote } from './lib/store'
 import Layout from './components/Layout'
 import Demo from './pages/Demo'
 import Trader from './pages/Trader'
@@ -24,6 +24,15 @@ export default function App() {
     if (theme === 'dark') root.classList.add('dark')
     else root.classList.remove('dark')
   }, [theme])
+
+  // Carrega o estado compartilhado da planilha (se o sync estiver configurado).
+  useEffect(() => {
+    hydrateFromRemote()
+    // Re-sincroniza ao voltar o foco para a aba.
+    const onFocus = () => hydrateFromRemote()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   return (
     <>

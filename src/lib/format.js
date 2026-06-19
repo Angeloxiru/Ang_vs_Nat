@@ -17,3 +17,8 @@ export const fmtDate = (iso) => {
 }
 
 export const todayISO = () => new Date().toISOString().slice(0, 10)
+
+export const fmtDateTime = (iso) => {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('pt-BR')
+}

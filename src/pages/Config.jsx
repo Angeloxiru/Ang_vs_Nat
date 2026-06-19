@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { useStore } from '../lib/store'
+import { useStore, syncNow, hydrateFromRemote } from '../lib/store'
+import { syncConfig, syncEnabled } from '../syncConfig'
+import { pingRemote } from '../lib/remote'
 import { SCENARIO_META } from '../lib/initialData'
 import { toast } from '../components/Toast'
-import { brl, fmtDate, todayISO } from '../lib/format'
+import { brl, fmtDate, fmtDateTime, todayISO } from '../lib/format'
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -110,6 +112,9 @@ export default function Config() {
   const config = useStore((s) => s.config)
   const dividends = useStore((s) => s.dividends)
   const priceHistory = useStore((s) => s.priceHistory)
+  const transactions = useStore((s) => s.transactions)
+  const auditLog = useStore((s) => s.auditLog)
+  const sync = useStore((s) => s.sync)
 
   const [dv, setDv] = useState({ date: todayISO(), type: 'dividendo', value: '' })
   const [manual, setManual] = useState({ date: todayISO(), price: '' })
@@ -142,6 +147,37 @@ export default function Config() {
       toast('Arquivo inválido.', 'error')
     }
   }
+
+  const exportAuditCSV = () => {
+    const header = ['data_hora', 'autor', 'acao', 'cenario', 'tipo', 'detalhe']
+    const describe = (e) => {
+      if (e.kind === 'transaction') {
+        const d = e.action === 'edit' ? e.data.before : e.data
+        return d ? `${d.type === 'buy' ? 'compra' : 'venda'} ${d.qty} @ R$ ${d.price}` : ''
+      }
+      if (e.kind === 'dividend') return `${e.data.type} R$ ${e.data.value}/ação em ${e.data.date}`
+      return ''
+    }
+    const rows = [...auditLog]
+      .sort((a, b) => a.ts.localeCompare(b.ts))
+      .map((e) => [fmtDateTime(e.ts), e.actor, e.action, e.scenario, e.kind, describe(e)])
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `isae4-auditoria-${todayISO()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const allTx = ['nat', 'ang']
+    .flatMap((who) => (transactions[who] || []).map((t) => ({ ...t, who })))
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  const ACTION_LABEL = { add: 'Adição', remove: 'Exclusão', edit: 'Edição' }
 
   return (
     <div className="space-y-5">
@@ -252,6 +288,182 @@ export default function Config() {
           ))}
           {priceHistory.length === 0 && <p className="py-3 text-center text-slate-400">Sem histórico de preços.</p>}
         </div>
+      </Section>
+
+      <Section title="Gerenciar movimentações (admin)">
+        <p className="text-xs text-slate-400">
+          Os jogadores não podem excluir operações. Use esta área apenas para corrigir erros — toda
+          exclusão é registrada na auditoria.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-slate-400">
+              <tr>
+                <th className="py-2">Data</th>
+                <th>Jogador</th>
+                <th>Tipo</th>
+                <th className="text-right">Qtd</th>
+                <th className="text-right">Preço</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {allTx.map((t) => (
+                <tr key={t.who + t.id} className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="py-2">{fmtDate(t.date)}</td>
+                  <td style={{ color: SCENARIO_META[t.who].color }} className="font-medium">
+                    {SCENARIO_META[t.who].label}
+                  </td>
+                  <td className={t.type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}>
+                    {t.type === 'buy' ? 'Compra' : 'Venda'}
+                  </td>
+                  <td className="text-right">{t.qty}</td>
+                  <td className="text-right">{brl(t.price)}</td>
+                  <td className="text-right">
+                    <button
+                      className="text-rose-500 hover:underline"
+                      onClick={() => {
+                        if (confirm(`Excluir ${t.type === 'buy' ? 'compra' : 'venda'} de ${t.qty} de ${SCENARIO_META[t.who].label}? A ação será registrada na auditoria.`)) {
+                          store.removeTransaction(t.who, t.id, 'admin')
+                          toast('Movimentação excluída (registrada na auditoria).', 'info')
+                        }
+                      }}
+                    >
+                      excluir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {allTx.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-3 text-center text-slate-400">Nenhuma movimentação.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      <Section title={`Registro de auditoria (${auditLog.length})`}>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">
+            Histórico imutável de todas as adições e exclusões, para conferência futura.
+          </p>
+          <button className="btn-ghost !py-1.5" onClick={exportAuditCSV} disabled={!auditLog.length}>
+            ⬇️ CSV
+          </button>
+        </div>
+        <div className="max-h-72 overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white text-left text-xs uppercase text-slate-400 dark:bg-slate-900">
+              <tr>
+                <th className="py-2">Quando</th>
+                <th>Autor</th>
+                <th>Ação</th>
+                <th>Detalhe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...auditLog].sort((a, b) => b.ts.localeCompare(a.ts)).map((e) => {
+                const d = e.action === 'edit' ? e.data.before : e.data
+                const detail =
+                  e.kind === 'transaction'
+                    ? `${d?.type === 'buy' ? 'Compra' : 'Venda'} de ${d?.qty} @ ${brl(d?.price)} (${fmtDate(d?.date)})`
+                    : `${(e.data.type || '').toUpperCase()} ${brl(e.data.value)}/ação em ${fmtDate(e.data.date)}`
+                return (
+                  <tr key={e.id} className="border-t border-slate-100 align-top dark:border-slate-800">
+                    <td className="py-2 whitespace-nowrap">{fmtDateTime(e.ts)}</td>
+                    <td className="font-medium" style={{ color: SCENARIO_META[e.actor]?.color }}>
+                      {SCENARIO_META[e.actor]?.label || e.actor}
+                    </td>
+                    <td>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                          e.action === 'remove'
+                            ? 'bg-rose-500/15 text-rose-500'
+                            : e.action === 'edit'
+                              ? 'bg-amber-500/15 text-amber-500'
+                              : 'bg-emerald-500/15 text-emerald-500'
+                        }`}
+                      >
+                        {ACTION_LABEL[e.action]}
+                      </span>
+                    </td>
+                    <td>{detail}</td>
+                  </tr>
+                )
+              })}
+              {auditLog.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-3 text-center text-slate-400">Sem registros ainda.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      <Section title="Sincronização (Google Sheets)">
+        {syncEnabled() ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    sync.status === 'ok'
+                      ? 'bg-emerald-500'
+                      : sync.status === 'syncing'
+                        ? 'bg-amber-400'
+                        : sync.status === 'error'
+                          ? 'bg-rose-500'
+                          : 'bg-slate-400'
+                  }`}
+                />
+                {sync.status === 'ok'
+                  ? 'Conectado'
+                  : sync.status === 'syncing'
+                    ? 'Sincronizando…'
+                    : sync.status === 'error'
+                      ? 'Erro'
+                      : 'Pronto'}
+              </span>
+              {sync.lastSync && (
+                <span className="text-xs text-slate-400">
+                  Último: {fmtDateTime(sync.lastSync)}
+                </span>
+              )}
+            </div>
+            {sync.error && <p className="text-xs text-rose-500">{sync.error}</p>}
+            <p className="break-all text-xs text-slate-400">Endpoint: {syncConfig.url}</p>
+            <div className="flex flex-wrap gap-3">
+              <button className="btn-ghost" onClick={() => hydrateFromRemote()}>
+                ⬇️ Puxar da planilha
+              </button>
+              <button className="btn-primary" onClick={() => syncNow()}>
+                ⬆️ Enviar para planilha
+              </button>
+              <button
+                className="btn-ghost"
+                onClick={async () => {
+                  try {
+                    await pingRemote()
+                    toast('Conexão OK com o backend.')
+                  } catch (e) {
+                    toast('Falha na conexão: ' + (e.message || e), 'error')
+                  }
+                }}
+              >
+                🔌 Testar conexão
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-400">
+            Sync desativado (modo offline / localStorage). Para ativar, crie o Web App em{' '}
+            <code>google-apps-script/Code.gs</code> e preencha <code>src/syncConfig.js</code>. Veja o
+            README.
+          </p>
+        )}
       </Section>
 
       <Section title="Backup de dados">
