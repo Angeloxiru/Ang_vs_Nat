@@ -3,8 +3,8 @@ import { persist } from 'zustand/middleware'
 import { initialState } from './initialData'
 import { loadRemote, saveRemote } from './remote'
 import { syncEnabled } from '../syncConfig'
-import { validateTransaction } from './portfolio'
 import { todayISO } from './format'
+import { executeOrders } from './orders'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -128,31 +128,20 @@ export const useStore = create(
       // Executa ao preço-alvo e só se houver caixa/ações suficientes (senão
       // permanece pendente para nova tentativa). Impacta só o próprio cenário.
       runPriceTargets: (price) => {
-        const p = Number(price)
-        if (!p) return
-        const date = todayISO()
-        ;['nat', 'ang'].forEach((who) => {
-          const pending = (get().orders[who] || []).filter((o) => o.status === 'pending')
-          for (const o of pending) {
-            const hit = o.condition === 'lte' ? p <= o.target : p >= o.target
-            if (!hit) continue
-            const tx = { date, type: o.type, qty: o.qty, price: o.target }
-            const data = { transactions: get().transactions, dividends: get().dividends }
-            const check = validateTransaction(who, get().config, data, tx)
-            if (!check.ok) continue // sem caixa/ações: tenta de novo no próximo preço
-            get().addTransaction(who, { ...tx, auto: true, orderId: o.id })
-            set((st) => ({
-              orders: {
-                ...st.orders,
-                [who]: st.orders[who].map((x) =>
-                  x.id === o.id
-                    ? { ...x, status: 'filled', filledAt: new Date().toISOString(), filledPrice: o.target }
-                    : x
-                )
-              }
-            }))
-          }
-        })
+        const s = get()
+        const r = executeOrders(
+          {
+            config: s.config,
+            transactions: s.transactions,
+            dividends: s.dividends,
+            orders: s.orders,
+            auditLog: s.auditLog
+          },
+          price,
+          todayISO()
+        )
+        if (r.executed.length === 0) return
+        set({ transactions: r.transactions, orders: r.orders, auditLog: r.auditLog })
       },
 
       // ---- Cotação / histórico de preços ----
