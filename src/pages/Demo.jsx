@@ -90,6 +90,7 @@ export default function Demo() {
     try {
       const q = await fetchCurrentQuote(config.ticker)
       store.setQuote(q)
+      store.runPriceTargets(q.price) // executa alvos atingidos com o novo preço
       try {
         const hist = await fetchHistory(config.ticker, config.startDate)
         if (hist.length) store.mergePriceHistory(hist)

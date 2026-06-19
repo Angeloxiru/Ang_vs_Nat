@@ -157,6 +157,8 @@ export default function Config() {
         return d ? `${d.type === 'buy' ? 'compra' : 'venda'} ${d.qty} @ R$ ${d.price}` : ''
       }
       if (e.kind === 'dividend') return `${e.data.type} R$ ${e.data.value}/ação em ${e.data.date}`
+      if (e.kind === 'order')
+        return `alvo ${e.data.type === 'buy' ? 'compra' : 'venda'} ${e.data.qty} @ R$ ${e.data.target} (${e.data.condition})`
       return ''
     }
     const rows = [...auditLog]
@@ -373,7 +375,9 @@ export default function Config() {
                 const detail =
                   e.kind === 'transaction'
                     ? `${d?.type === 'buy' ? 'Compra' : 'Venda'} de ${d?.qty} @ ${brl(d?.price)} (${fmtDate(d?.date)})`
-                    : `${(e.data.type || '').toUpperCase()} ${brl(e.data.value)}/ação em ${fmtDate(e.data.date)}`
+                    : e.kind === 'order'
+                      ? `Alvo ${e.data.type === 'buy' ? 'compra' : 'venda'} de ${e.data.qty} @ ${brl(e.data.target)} (${e.data.condition === 'lte' ? '≤' : '≥'})`
+                      : `${(e.data.type || '').toUpperCase()} ${brl(e.data.value)}/ação em ${fmtDate(e.data.date)}`
                 return (
                   <tr key={e.id} className="border-t border-slate-100 align-top dark:border-slate-800">
                     <td className="py-2 whitespace-nowrap">{fmtDateTime(e.ts)}</td>

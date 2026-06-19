@@ -18,6 +18,8 @@ export default function Trader({ who }) {
   const price = currentPrice(store)
 
   const [form, setForm] = useState({ date: todayISO(), type: 'buy', qty: '', price: '' })
+  const orders = useStore((s) => s.orders[who]) || []
+  const [order, setOrder] = useState({ type: 'buy', qty: '', target: '', condition: 'lte' })
 
   const data = { transactions: store.transactions, dividends: store.dividends }
   const summary = scenarioSummary(who, config, data, price, todayISO())
@@ -53,7 +55,24 @@ export default function Trader({ who }) {
     setForm({ date: todayISO(), type: 'buy', qty: '', price: '' })
   }
 
+  const submitOrder = (e) => {
+    e.preventDefault()
+    const qty = Number(order.qty)
+    const target = Number(order.target)
+    if (!(qty > 0)) return toast('Quantidade deve ser positiva.', 'error')
+    if (!(target > 0)) return toast('Preço-alvo deve ser positivo.', 'error')
+    store.addOrder(who, { ...order, qty, target })
+    store.runPriceTargets(price) // pode já estar atingido pela cotação atual
+    toast('Alvo cadastrado. Será executado quando a cotação atingir o preço.')
+    setOrder({ type: order.type, qty: '', target: '', condition: order.condition })
+  }
+
   const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date))
+  const sortedOrders = [...orders].sort((a, b) => {
+    const rank = { pending: 0, filled: 1, canceled: 2 }
+    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
+    return a.target - b.target
+  })
 
   return (
     <div className="space-y-5">
@@ -103,6 +122,93 @@ export default function Trader({ who }) {
         </p>
       </section>
 
+      {/* Alvos de preço */}
+      <section className="card">
+        <h2 className="mb-1 font-semibold">🎯 Alvos de preço (execução automática)</h2>
+        <p className="mb-3 text-xs text-slate-400">
+          Defina faixas de compra/venda. Quando a cotação atingir o alvo, o sistema executa a
+          quantidade <b>ao preço-alvo</b> automaticamente (na atualização da cotação). Cotação atual:{' '}
+          {brl(price)}.
+        </p>
+        <form onSubmit={submitOrder} className="grid grid-cols-2 gap-3 sm:grid-cols-5 sm:items-end">
+          <div>
+            <label className="label">Tipo</label>
+            <select
+              className="input"
+              value={order.type}
+              onChange={(e) =>
+                setOrder({ ...order, type: e.target.value, condition: e.target.value === 'buy' ? 'lte' : 'gte' })
+              }
+            >
+              <option value="buy">Compra</option>
+              <option value="sell">Venda</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Gatilho</label>
+            <select className="input" value={order.condition} onChange={(e) => setOrder({ ...order, condition: e.target.value })}>
+              <option value="lte">Quando cair até (≤)</option>
+              <option value="gte">Quando subir até (≥)</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Quantidade</label>
+            <input type="number" min="1" step="1" className="input" value={order.qty} onChange={(e) => setOrder({ ...order, qty: e.target.value })} placeholder="0" />
+          </div>
+          <div>
+            <label className="label">Preço-alvo (R$)</label>
+            <input type="number" min="0" step="0.01" className="input" value={order.target} onChange={(e) => setOrder({ ...order, target: e.target.value })} placeholder="0,00" />
+          </div>
+          <button type="submit" className="btn-primary col-span-2 sm:col-span-1">Adicionar alvo</button>
+        </form>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase text-slate-400">
+              <tr>
+                <th className="py-2">Tipo</th>
+                <th>Gatilho</th>
+                <th className="text-right">Qtd</th>
+                <th className="text-right">Alvo</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedOrders.map((o) => (
+                <tr key={o.id} className="border-t border-slate-100 dark:border-slate-800">
+                  <td className={`py-2 ${o.type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {o.type === 'buy' ? 'Compra' : 'Venda'}
+                  </td>
+                  <td className="text-xs text-slate-400">{o.condition === 'lte' ? '≤' : '≥'} alvo</td>
+                  <td className="text-right">{o.qty}</td>
+                  <td className="text-right">{brl(o.target)}</td>
+                  <td>
+                    {o.status === 'pending' && <span className="text-amber-500">⏳ pendente</span>}
+                    {o.status === 'filled' && (
+                      <span className="text-emerald-500">✅ executado{o.filledPrice ? ` @ ${brl(o.filledPrice)}` : ''}</span>
+                    )}
+                    {o.status === 'canceled' && <span className="text-slate-400">cancelado</span>}
+                  </td>
+                  <td className="text-right">
+                    {o.status === 'pending' && (
+                      <button className="text-rose-500 hover:underline" onClick={() => store.cancelOrder(who, o.id)}>
+                        cancelar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {sortedOrders.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-3 text-center text-slate-400">Nenhum alvo cadastrado.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* Gráfico */}
       <section className="card">
         <h2 className="mb-3 font-semibold">Patrimônio vs Buffet</h2>
@@ -134,6 +240,7 @@ export default function Trader({ who }) {
                   <td className="py-2">{fmtDate(t.date)}</td>
                   <td className={t.type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}>
                     {t.type === 'buy' ? 'Compra' : 'Venda'}
+                    {t.auto && <span title="Executada por alvo de preço"> ⚡</span>}
                   </td>
                   <td className="text-right">{t.qty}</td>
                   <td className="text-right">{brl(t.price)}</td>

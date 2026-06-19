@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware'
 import { initialState } from './initialData'
 import { loadRemote, saveRemote } from './remote'
 import { syncEnabled } from '../syncConfig'
+import { validateTransaction } from './portfolio'
+import { todayISO } from './format'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -93,6 +95,66 @@ export const useStore = create(
           }
         }),
 
+      // ---- Alvos de preço (ordens automáticas) ----
+      addOrder: (who, order) =>
+        set((s) => {
+          const record = {
+            id: uid(),
+            type: order.type,
+            qty: Number(order.qty),
+            target: Number(order.target),
+            condition: order.condition || (order.type === 'buy' ? 'lte' : 'gte'),
+            createdAt: new Date().toISOString(),
+            status: 'pending'
+          }
+          return {
+            orders: { ...s.orders, [who]: [...(s.orders[who] || []), record] },
+            auditLog: [...s.auditLog, auditEntry(who, 'add', who, 'order', record)]
+          }
+        }),
+      cancelOrder: (who, id) =>
+        set((s) => {
+          const o = (s.orders[who] || []).find((x) => x.id === id)
+          if (!o || o.status !== 'pending') return {}
+          return {
+            orders: {
+              ...s.orders,
+              [who]: s.orders[who].map((x) => (x.id === id ? { ...x, status: 'canceled' } : x))
+            },
+            auditLog: [...s.auditLog, auditEntry(who, 'remove', who, 'order', o)]
+          }
+        }),
+      // Avalia as ordens pendentes contra um preço e executa as atingidas.
+      // Executa ao preço-alvo e só se houver caixa/ações suficientes (senão
+      // permanece pendente para nova tentativa). Impacta só o próprio cenário.
+      runPriceTargets: (price) => {
+        const p = Number(price)
+        if (!p) return
+        const date = todayISO()
+        ;['nat', 'ang'].forEach((who) => {
+          const pending = (get().orders[who] || []).filter((o) => o.status === 'pending')
+          for (const o of pending) {
+            const hit = o.condition === 'lte' ? p <= o.target : p >= o.target
+            if (!hit) continue
+            const tx = { date, type: o.type, qty: o.qty, price: o.target }
+            const data = { transactions: get().transactions, dividends: get().dividends }
+            const check = validateTransaction(who, get().config, data, tx)
+            if (!check.ok) continue // sem caixa/ações: tenta de novo no próximo preço
+            get().addTransaction(who, { ...tx, auto: true, orderId: o.id })
+            set((st) => ({
+              orders: {
+                ...st.orders,
+                [who]: st.orders[who].map((x) =>
+                  x.id === o.id
+                    ? { ...x, status: 'filled', filledAt: new Date().toISOString(), filledPrice: o.target }
+                    : x
+                )
+              }
+            }))
+          }
+        })
+      },
+
       // ---- Cotação / histórico de preços ----
       setQuote: (quote) => set(() => ({ quote: { ...quote, updatedAt: new Date().toISOString() } })),
       mergePriceHistory: (entries) =>
@@ -122,6 +184,7 @@ export const useStore = create(
             profiles: s.profiles,
             transactions: s.transactions,
             dividends: s.dividends,
+            orders: s.orders,
             priceHistory: s.priceHistory,
             auditLog: s.auditLog
           },
@@ -136,6 +199,7 @@ export const useStore = create(
           profiles: { ...s.profiles, ...(data.profiles || {}) },
           transactions: { ...s.transactions, ...(data.transactions || {}) },
           dividends: data.dividends || s.dividends,
+          orders: { ...s.orders, ...(data.orders || {}) },
           priceHistory: data.priceHistory || s.priceHistory,
           auditLog: data.auditLog || s.auditLog
         }))
@@ -150,6 +214,7 @@ export const useStore = create(
         profiles: s.profiles,
         transactions: s.transactions,
         dividends: s.dividends,
+        orders: s.orders,
         quote: s.quote,
         priceHistory: s.priceHistory,
         auditLog: s.auditLog,
@@ -219,7 +284,10 @@ export async function hydrateFromRemote() {
   } finally {
     setTimeout(() => {
       hydrating = false
-    }, 400)
+      // Após carregar o estado, avalia alvos contra o último preço conhecido.
+      const st = useStore.getState()
+      st.runPriceTargets(currentPrice(st))
+    }, 450)
   }
 }
 
@@ -228,7 +296,7 @@ export function syncNow() {
 }
 
 // Auto-save: observa as fatias de dados e envia ao remoto com debounce.
-const DATA_KEYS = ['config', 'profiles', 'transactions', 'dividends', 'priceHistory', 'auditLog']
+const DATA_KEYS = ['config', 'profiles', 'transactions', 'dividends', 'orders', 'priceHistory', 'auditLog']
 useStore.subscribe((state, prev) => {
   if (!syncEnabled() || hydrating) return
   const changed = DATA_KEYS.some((k) => state[k] !== prev[k])

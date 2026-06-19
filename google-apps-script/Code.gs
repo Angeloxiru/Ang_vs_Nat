@@ -163,5 +163,8 @@ function describe_(en) {
   if (en.kind === 'dividend') {
     return (en.data.type || '') + ' R$ ' + en.data.value + '/ação em ' + en.data.date
   }
+  if (en.kind === 'order') {
+    return 'alvo ' + (en.data.type === 'buy' ? 'compra' : 'venda') + ' ' + en.data.qty + ' @ R$ ' + en.data.target + ' (' + en.data.condition + ')'
+  }
   return ''
 }
