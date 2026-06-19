@@ -154,23 +154,30 @@ só se houver caixa/ações; senão a ordem segue pendente. Há dois executores:
 
 - **No app (instantâneo):** avalia os alvos quando o preço é atualizado (botão
   Atualizar, ao abrir e ao sincronizar).
-- **Robô em segundo plano (GitHub Actions):** em dias úteis, das 10:00 às 17:00
-  (BRT), **a cada 15 minutos** — executa mesmo com todos os apps fechados.
+- **Robô em segundo plano (Google Apps Script):** em dias úteis, das 10:00 às
+  17:00 (BRT), **a cada 15 minutos** — executa mesmo com todos os apps fechados.
 
-### Configurar o robô
+### Configurar o robô (gatilho no Apps Script — recomendado)
+
+O agendamento é feito pelo próprio Apps Script (gatilho de tempo), que é
+**confiável** — ao contrário do cron do GitHub Actions, que atrasa/descarta
+execuções. A função `runPriceTargets` já está em `google-apps-script/Code.gs`.
 
 1. Requer o backend Google Sheets configurado (ver acima).
-2. Em **Settings → Secrets and variables → Actions → New repository secret**:
-   - `SHEET_SECRET`: o mesmo `SECRET` do `Code.gs` (se você definiu).
-   - `SHEET_URL` *(opcional)*: sobrescreve a URL do `src/syncConfig.js`.
-3. O workflow [`.github/workflows/orders.yml`](.github/workflows/orders.yml) roda
-   sozinho no horário; dá para disparar manualmente em **Actions → Executar alvos
-   de preço → Run workflow**.
+2. No editor do Apps Script: **Acionadores** (ícone de relógio) →
+   **Adicionar acionador**:
+   - Função: `runPriceTargets`
+   - Origem do evento: **Baseado no tempo**
+   - Tipo: **Timer de minutos → A cada 15 minutos**
+   - Salvar e autorizar.
+
+A própria função só age em dias úteis, 10h–17h (BRT); fora disso ela retorna sem
+fazer nada. Ela busca a cotação no Yahoo, executa os alvos atingidos e grava na
+planilha (Dados/Transacoes/Auditoria) + atualiza o histórico de preços do dia.
 
 > Intervalo recomendado: **15 min** — a cotação da B3 (Yahoo) já tem ~15 min de
-> atraso e o cron do GitHub tem mínimo de 5 min (e pode atrasar). Ajuste o `cron`
-> no workflow se quiser. Workflows agendados podem ser desativados após ~60 dias
-> sem atividade no repositório (o GitHub avisa por e-mail; basta reativar).
+> atraso. O workflow do GitHub [`.github/workflows/orders.yml`](.github/workflows/orders.yml)
+> permanece apenas como **disparo manual de backup** (Actions → Run workflow).
 
 ## 📈 Cotação ISAE4
 
