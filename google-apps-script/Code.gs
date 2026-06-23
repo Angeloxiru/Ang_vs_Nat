@@ -303,9 +303,13 @@ function fetchPrice_(ticker) {
 // Função do acionador de tempo. Roda só em dias úteis, 10h-17h (BRT).
 function runPriceTargets() {
   var TZ = 'America/Sao_Paulo'
-  var dow = Number(Utilities.formatDate(new Date(), TZ, 'u')) // 1=seg ... 7=dom
-  var hour = Number(Utilities.formatDate(new Date(), TZ, 'H')) // 0-23
-  if (dow > 5 || hour < 10 || hour > 17) return // fora do pregão
+  // Evita o padrão 'u' do formatDate (derruba o runtime V8). Calcula o dia da
+  // semana a partir do Y-M-D no fuso de São Paulo via getUTCDay (0=dom..6=sáb).
+  var ymd = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd')
+  var hour = Number(Utilities.formatDate(new Date(), TZ, 'HH')) // 0-23
+  var parts = ymd.split('-')
+  var dow = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))).getUTCDay()
+  if (dow === 0 || dow === 6 || hour < 10 || hour > 17) return // fora do pregão
 
   var lock = LockService.getScriptLock()
   lock.waitLock(20000)
@@ -313,7 +317,7 @@ function runPriceTargets() {
     var state = readState_()
     if (!state || !state.config) return
     var price = fetchPrice_(state.config.ticker)
-    var date = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd')
+    var date = ymd
     var r = executeOrders_(state, price, date)
 
     // histórico de preços: 1 ponto por dia
