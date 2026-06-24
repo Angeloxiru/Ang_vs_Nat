@@ -285,13 +285,24 @@ export default function Config() {
           }}>Salvar preço</button>
         </div>
         <div className="max-h-48 overflow-y-auto text-sm">
-          {[...priceHistory].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60).map((p) => (
-            <div key={p.date} className="flex items-center justify-between border-t border-slate-100 py-1 dark:border-slate-800">
-              <span>{fmtDate(p.date)}</span>
-              <span>{brl(p.price)}</span>
-              <button className="text-rose-500" onClick={() => store.removePrice(p.date)}>×</button>
-            </div>
-          ))}
+          <div className="flex items-center justify-between border-b border-slate-200 py-1 text-xs uppercase text-slate-400 dark:border-slate-700">
+            <span>Data</span>
+            <span>Abertura</span>
+            <span>Fechamento</span>
+            <span></span>
+          </div>
+          {[...priceHistory].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60).map((p) => {
+            const close = p.close ?? p.price
+            const open = p.open ?? close
+            return (
+              <div key={p.date} className="flex items-center justify-between border-t border-slate-100 py-1 dark:border-slate-800">
+                <span>{fmtDate(p.date)}</span>
+                <span>{brl(open)}</span>
+                <span>{brl(close)}</span>
+                <button className="text-rose-500" onClick={() => store.removePrice(p.date)}>×</button>
+              </div>
+            )
+          })}
           {priceHistory.length === 0 && <p className="py-3 text-center text-slate-400">Sem histórico de preços.</p>}
         </div>
       </Section>

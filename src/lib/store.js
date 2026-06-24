@@ -145,18 +145,27 @@ export const useStore = create(
       },
 
       // ---- Cotação / histórico de preços ----
+      // Entradas de priceHistory: { date, open, close }. `close` é o preço
+      // usado pelo gráfico. Campo legado `price` ainda é lido como fallback.
       setQuote: (quote) => set(() => ({ quote: { ...quote, updatedAt: new Date().toISOString() } })),
+      // Backfill (ex.: histórico do Yahoo): só ADICIONA dias que faltam — nunca
+      // sobrescreve o que o robô/admin já gravou (open/close são a fonte oficial).
       mergePriceHistory: (entries) =>
         set((s) => {
-          const map = new Map((s.priceHistory || []).map((p) => [p.date, p.price]))
-          for (const e of entries) map.set(e.date, e.price)
-          return { priceHistory: sortedHistory([...map].map(([date, price]) => ({ date, price }))) }
+          const map = new Map((s.priceHistory || []).map((p) => [p.date, p]))
+          for (const e of entries) {
+            if (!map.has(e.date)) map.set(e.date, { date: e.date, open: e.price, close: e.price })
+          }
+          return { priceHistory: sortedHistory([...map.values()]) }
         }),
+      // Admin define o preço de um dia: mantém a abertura se já existir.
       setManualPrice: (date, price) =>
         set((s) => {
-          const map = new Map((s.priceHistory || []).map((p) => [p.date, p.price]))
-          map.set(date, Number(price))
-          return { priceHistory: sortedHistory([...map].map(([d, p]) => ({ date: d, price: p }))) }
+          const map = new Map((s.priceHistory || []).map((p) => [p.date, p]))
+          const ex = map.get(date)
+          const open = ex && ex.open != null ? ex.open : Number(price)
+          map.set(date, { date, open, close: Number(price) })
+          return { priceHistory: sortedHistory([...map.values()]) }
         }),
       removePrice: (date) =>
         set((s) => ({ priceHistory: (s.priceHistory || []).filter((p) => p.date !== date) })),
@@ -221,13 +230,15 @@ export function usePriceAt() {
   const initialPrice = useStore((s) => s.config.initialPrice)
   const sorted = sortedHistory(history)
 
+  // Fechamento do dia (fallback: abertura, depois campo legado `price`).
+  const dayPrice = (p) => p.close ?? p.open ?? p.price
   return (iso) => {
     let price = null
     for (const p of sorted) {
-      if (p.date <= iso) price = p.price
+      if (p.date <= iso) price = dayPrice(p)
       else break
     }
-    if (price == null && sorted.length > 0) price = sorted[0].price // antes do 1º ponto
+    if (price == null && sorted.length > 0) price = dayPrice(sorted[0]) // antes do 1º ponto
     if (price == null) price = quote?.price ?? initialPrice
     return price
   }

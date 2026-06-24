@@ -92,6 +92,7 @@ function doPost(e) {
     // 2) Abas legíveis para conferência (reescritas a cada save)
     writeTransactions_(state)
     writeDividends_(state)
+    writeQuotes_(state)
 
     // 3) Auditoria append-only (acrescenta só entradas novas, por id)
     appendAudit_(state.auditLog || [])
@@ -128,6 +129,21 @@ function writeDividends_(state) {
   })
   rows.sort(function (a, b) {
     return String(a[1]).localeCompare(String(b[1]))
+  })
+  if (rows.length) sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows)
+}
+
+function writeQuotes_(state) {
+  var sh = sheet_('Cotacoes')
+  sh.clear()
+  sh.appendRow(['data', 'abertura', 'fechamento'])
+  var rows = (state.priceHistory || []).map(function (p) {
+    var close = p.close != null ? p.close : p.price != null ? p.price : ''
+    var open = p.open != null ? p.open : close
+    return [p.date, open, close]
+  })
+  rows.sort(function (a, b) {
+    return String(a[0]).localeCompare(String(b[0]))
   })
   if (rows.length) sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows)
 }
@@ -320,17 +336,19 @@ function runPriceTargets() {
     var date = ymd
     var r = executeOrders_(state, price, date)
 
-    // histórico de preços: 1 ponto por dia
+    // histórico de preços: abertura (1ª leitura do dia) e fechamento (última).
     var ph = (state.priceHistory || []).slice()
     var found = false
     for (var i = 0; i < ph.length; i++) {
       if (ph[i].date === date) {
-        ph[i] = { date: date, price: price }
+        var e = ph[i]
+        var open = e.open != null ? e.open : e.close != null ? e.close : e.price != null ? e.price : price
+        ph[i] = { date: date, open: open, close: price }
         found = true
         break
       }
     }
-    if (!found) ph.push({ date: date, price: price })
+    if (!found) ph.push({ date: date, open: price, close: price })
     ph.sort(function (a, b) {
       return a.date < b.date ? -1 : a.date > b.date ? 1 : 0
     })
@@ -344,6 +362,7 @@ function runPriceTargets() {
     sheet_(DATA_SHEET).getRange('A1').setValue(JSON.stringify(newState))
     writeTransactions_(newState)
     writeDividends_(newState)
+    writeQuotes_(newState)
     appendAudit_(newState.auditLog || [])
 
     Logger.log('Cotação ' + price + ' em ' + date + '. Executadas: ' + r.executed.length)

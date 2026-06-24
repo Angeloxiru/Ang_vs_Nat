@@ -179,11 +179,16 @@ planilha (Dados/Transacoes/Auditoria) + atualiza o histórico de preços do dia.
 > atraso. O workflow do GitHub [`.github/workflows/orders.yml`](.github/workflows/orders.yml)
 > permanece apenas como **disparo manual de backup** (Actions → Run workflow).
 
-## 📈 Cotação ISAE4
+## 📈 Cotação ISAE4 e série histórica
 
-Busca via Yahoo Finance (`ISAE4.SA`) usando proxies CORS de fallback. Se a
-consulta online falhar, cadastre preços manualmente em
-**Configurações → Histórico de cotações**.
+A cotação atual vem do Yahoo Finance (`ISAE4.SA`) via proxies CORS (com fallback
+manual no Admin). A **série diária do gráfico** é a nossa própria base: o robô do
+Apps Script grava, a cada dia útil, a **abertura** (1ª leitura, ~10h) e o
+**fechamento** (última leitura, ~17h) na planilha (aba `Cotacoes` + dentro de
+`Dados`). O gráfico usa o fechamento de cada dia. O histórico do Yahoo é usado só
+para **preencher dias antigos** que faltam — nunca sobrescreve o que o robô/admin
+gravou. Em **Configurações → Histórico de cotações** dá para ver/editar
+abertura e fechamento por dia.
 
 ## ✅ Checklist de critérios de aceite
 
