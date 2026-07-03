@@ -68,11 +68,8 @@ export default function Trader({ who }) {
   }
 
   const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date))
-  const sortedOrders = [...orders].sort((a, b) => {
-    const rank = { pending: 0, filled: 1, canceled: 2 }
-    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
-    return a.target - b.target
-  })
+  // Somente ordens em aberto: as executadas aparecem no histórico de movimentações.
+  const openOrders = [...orders].filter((o) => o.status === 'pending').sort((a, b) => a.target - b.target)
 
   return (
     <div className="space-y-5">
@@ -175,7 +172,7 @@ export default function Trader({ who }) {
               </tr>
             </thead>
             <tbody>
-              {sortedOrders.map((o) => (
+              {openOrders.map((o) => (
                 <tr key={o.id} className="border-t border-slate-100 dark:border-slate-800">
                   <td className={`py-2 ${o.type === 'buy' ? 'text-emerald-500' : 'text-rose-500'}`}>
                     {o.type === 'buy' ? 'Compra' : 'Venda'}
@@ -184,24 +181,18 @@ export default function Trader({ who }) {
                   <td className="text-right">{o.qty}</td>
                   <td className="text-right">{brl(o.target)}</td>
                   <td>
-                    {o.status === 'pending' && <span className="text-amber-500">⏳ pendente</span>}
-                    {o.status === 'filled' && (
-                      <span className="text-emerald-500">✅ executado{o.filledPrice ? ` @ ${brl(o.filledPrice)}` : ''}</span>
-                    )}
-                    {o.status === 'canceled' && <span className="text-slate-400">cancelado</span>}
+                    <span className="text-amber-500">⏳ pendente</span>
                   </td>
                   <td className="text-right">
-                    {o.status === 'pending' && (
-                      <button className="text-rose-500 hover:underline" onClick={() => store.cancelOrder(who, o.id)}>
-                        cancelar
-                      </button>
-                    )}
+                    <button className="text-rose-500 hover:underline" onClick={() => store.cancelOrder(who, o.id)}>
+                      cancelar
+                    </button>
                   </td>
                 </tr>
               ))}
-              {sortedOrders.length === 0 && (
+              {openOrders.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-3 text-center text-slate-400">Nenhum alvo cadastrado.</td>
+                  <td colSpan={6} className="py-3 text-center text-slate-400">Nenhum alvo em aberto.</td>
                 </tr>
               )}
             </tbody>
