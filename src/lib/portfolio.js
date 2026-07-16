@@ -116,24 +116,62 @@ export function profitability(equityValue, initialCapital) {
   return (equityValue / base - 1) * 100
 }
 
+// Preço médio (custo médio) das ações atualmente em carteira.
+// Compras recalculam a média ponderada; vendas reduzem a quantidade mantendo
+// o preço médio (método do custo médio, padrão no Brasil).
+export function averageCost(transactions = [], upToDate) {
+  const limit = upToDate ? toDate(upToDate) : null
+  const sorted = [...transactions].sort((a, b) => {
+    const da = toDate(a.date).getTime()
+    const db = toDate(b.date).getTime()
+    if (da !== db) return da - db
+    // na mesma data: compra antes de venda
+    return (a.type === 'sell' ? 1 : 0) - (b.type === 'sell' ? 1 : 0)
+  })
+  let shares = 0
+  let costBasis = 0 // custo total das ações em carteira
+  for (const t of sorted) {
+    if (limit && toDate(t.date) > limit) break
+    const qty = Number(t.qty) || 0
+    const price = Number(t.price) || 0
+    if (t.type === 'sell') {
+      const avg = shares > 0 ? costBasis / shares : 0
+      const sellQty = Math.min(qty, shares)
+      costBasis -= avg * sellQty
+      shares -= sellQty
+    } else {
+      costBasis += qty * price
+      shares += qty
+    }
+  }
+  return shares > 0 ? costBasis / shares : 0
+}
+
 // Calcula um resumo completo de um cenário em uma data, dado um preço.
 export function scenarioSummary(scenario, config, data, price, atDate) {
   const { initialCapital, rfMonthlyRate, startDate, initialPrice } = config
   const dividends = data.dividends || []
   let state
+  let avgCost
   if (scenario === 'buffet') {
     state = buffetStateAt(atDate, { initialCapital, initialPrice, rfMonthlyRate, startDate }, dividends)
+    avgCost = state.shares > 0 ? Number(initialPrice) || 0 : 0
   } else {
     const tx = (data.transactions && data.transactions[scenario]) || []
     state = activeStateAt(atDate, { initialCapital, rfMonthlyRate, startDate }, tx, dividends)
+    avgCost = averageCost(tx, atDate)
   }
   const eq = equity(state, price)
+  const priceNow = Number(price) || 0
   return {
     scenario,
     cash: state.cash,
     shares: state.shares,
+    avgCost,
     dividendsReceived: state.dividendsReceived,
-    marketValue: state.shares * (Number(price) || 0),
+    marketValue: state.shares * priceNow,
+    // lucro/prejuízo não realizado da posição em ações (vs custo médio)
+    unrealized: state.shares * (priceNow - avgCost),
     equity: eq,
     profitability: profitability(eq, initialCapital)
   }
