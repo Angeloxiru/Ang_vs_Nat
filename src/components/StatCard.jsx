@@ -43,6 +43,12 @@ export function StatCard({ scenario, summary, profile, rank }) {
           <dd className="font-medium text-slate-700 dark:text-slate-200">{num(summary.shares)}</dd>
         </div>
         <div className="flex justify-between">
+          <dt>Preço médio</dt>
+          <dd className="font-medium text-slate-700 dark:text-slate-200">
+            {summary.shares > 0 ? brl(summary.avgCost) : '—'}
+          </dd>
+        </div>
+        <div className="flex justify-between">
           <dt>Caixa RF</dt>
           <dd className="font-medium text-slate-700 dark:text-slate-200">{brl(summary.cash)}</dd>
         </div>
