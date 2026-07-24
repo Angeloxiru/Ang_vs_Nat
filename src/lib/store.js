@@ -244,8 +244,25 @@ export function usePriceAt() {
   }
 }
 
+// Preço "atual" = a fonte mais recente disponível. O robô (Apps Script) grava
+// o fechamento do dia em priceHistory a cada 15 min; a cotação do app (quote)
+// só muda no botão Atualizar. Preferimos o histórico do robô quando ele for de
+// data igual ou mais recente que a cotação do app.
+export function latestHistory(state) {
+  const hist = [...(state.priceHistory || [])].sort((a, b) => a.date.localeCompare(b.date))
+  const last = hist[hist.length - 1]
+  if (!last) return null
+  return { date: last.date, price: last.close ?? last.open ?? last.price }
+}
+
 export function currentPrice(state) {
-  return state.quote?.price ?? state.config.initialPrice
+  const last = latestHistory(state)
+  const q = state.quote
+  const qDate = q?.time ? q.time.slice(0, 10) : q?.updatedAt ? q.updatedAt.slice(0, 10) : null
+  if (last && (!qDate || last.date >= qDate)) return last.price
+  if (q?.price != null) return q.price
+  if (last) return last.price
+  return state.config.initialPrice
 }
 
 // =====================================================================
