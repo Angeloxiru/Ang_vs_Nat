@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useStore, usePriceAt, currentPrice } from '../lib/store'
+import { useStore, usePriceAt, currentPrice, latestHistory } from '../lib/store'
 import { scenarioSummary, buildTimeSeries } from '../lib/portfolio'
 import { SCENARIOS, SCENARIO_META } from '../lib/initialData'
 import { fetchCurrentQuote, fetchHistory } from '../lib/quote'
@@ -28,6 +28,7 @@ export default function Demo() {
 
   const data = { transactions: store.transactions, dividends: store.dividends }
   const price = currentPrice(store)
+  const robotLast = latestHistory(store)
 
   const applyPeriod = (key) => {
     const today = todayISO()
@@ -115,9 +116,14 @@ export default function Demo() {
           <div className="text-xs text-slate-400">Cotação atual de {config.ticker}</div>
           <div className="text-2xl font-bold">{brl(price)}</div>
           <div className="text-xs text-slate-400">
+            {robotLast
+              ? `Robô (planilha): ${brl(robotLast.price)} em ${fmtDate(robotLast.date)}`
+              : 'Robô: sem registro na planilha ainda'}
+          </div>
+          <div className="text-xs text-slate-400">
             {quote?.updatedAt
-              ? `Atualizado em ${new Date(quote.updatedAt).toLocaleString('pt-BR')}`
-              : 'Usando preço inicial (sem cotação online ainda)'}
+              ? `App (Yahoo): ${brl(quote.price)} · ${new Date(quote.updatedAt).toLocaleString('pt-BR')}`
+              : 'App: nenhuma cotação buscada ainda'}
           </div>
         </div>
         <div className="flex items-center gap-2">
