@@ -10,9 +10,12 @@ permissions:
   pages: write
   id-token: write
 
+# Recomendação do GitHub para Pages: enfileirar deploys em vez de cancelar.
+# Com cancel-in-progress:true, um "Run workflow" manual cancelava o deploy do
+# merge (aparecia como run cancelado, parecendo falha).
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
