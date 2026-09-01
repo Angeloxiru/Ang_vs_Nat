@@ -58,6 +58,16 @@ function readState_() {
   }
 }
 
+// Mantém no estado apenas as últimas MAX_AUDIT entradas de auditoria (o
+// histórico COMPLETO fica na aba Auditoria, append-only). Evita que o JSON do
+// estado cresça sem limite.
+var MAX_AUDIT = 1000
+function capAuditState_(state) {
+  var log = state.auditLog || []
+  if (log.length <= MAX_AUDIT) return state
+  return Object.assign({}, state, { auditLog: log.slice(log.length - MAX_AUDIT) })
+}
+
 // Grava o estado dividido em pedaços na coluna A da aba Dados, contornando o
 // limite de 50000 caracteres por célula do Google Sheets.
 function writeState_(state) {
@@ -133,16 +143,17 @@ function doPost(e) {
   const lock = LockService.getScriptLock()
   lock.waitLock(20000)
   try {
-    // 1) Estado completo (fonte da verdade do app), em pedaços
-    writeState_(state)
-
-    // 2) Abas legíveis para conferência (reescritas a cada save)
-    writeTransactions_(state)
-    writeDividends_(state)
-    writeQuotes_(state)
-
-    // 3) Auditoria append-only (acrescenta só entradas novas, por id)
+    // 1) Auditoria COMPLETA (append-only) antes de reduzir o estado
     appendAudit_(state.auditLog || [])
+
+    // 2) Estado (com auditLog limitado), gravado em pedaços
+    const slim = capAuditState_(state)
+    writeState_(slim)
+
+    // 3) Abas legíveis para conferência (reescritas a cada save)
+    writeTransactions_(slim)
+    writeDividends_(slim)
+    writeQuotes_(slim)
 
     return json_({ ok: true, savedAt: new Date().toISOString() })
   } finally {
@@ -406,11 +417,13 @@ function runPriceTargets() {
       auditLog: r.auditLog,
       priceHistory: ph
     })
-    writeState_(newState)
-    writeTransactions_(newState)
-    writeDividends_(newState)
-    writeQuotes_(newState)
+    // Auditoria completa (append-only) antes de reduzir o estado
     appendAudit_(newState.auditLog || [])
+    var slim = capAuditState_(newState)
+    writeState_(slim)
+    writeTransactions_(slim)
+    writeDividends_(slim)
+    writeQuotes_(slim)
 
     Logger.log('Cotação ' + price + ' em ' + date + '. Executadas: ' + r.executed.length)
   } finally {
