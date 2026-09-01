@@ -71,6 +71,35 @@ function writeState_(state) {
   sh.getRange(1, 1, chunks.length, 1).setValues(chunks)
 }
 
+// Diagnóstico: rode manualmente (Executar) e veja em "Registros de execução"
+// o tamanho de cada parte do estado, para identificar o que está inchando.
+function diagnostico() {
+  var state = readState_()
+  if (!state) {
+    Logger.log('Sem estado na planilha.')
+    return
+  }
+  function len(x) {
+    return JSON.stringify(x || null).length
+  }
+  function count(x) {
+    return (x || []).length
+  }
+  Logger.log('TOTAL: ' + JSON.stringify(state).length + ' caracteres')
+  Logger.log('profiles: ' + len(state.profiles))
+  Logger.log(
+    'transactions: ' + len(state.transactions) +
+      ' (nat=' + count(state.transactions && state.transactions.nat) +
+      ', ang=' + count(state.transactions && state.transactions.ang) + ')'
+  )
+  Logger.log('orders: ' + len(state.orders) +
+    ' (nat=' + count(state.orders && state.orders.nat) +
+    ', ang=' + count(state.orders && state.orders.ang) + ')')
+  Logger.log('dividends: ' + len(state.dividends) + ' (' + count(state.dividends) + ')')
+  Logger.log('priceHistory: ' + len(state.priceHistory) + ' (' + count(state.priceHistory) + ' dias)')
+  Logger.log('auditLog: ' + len(state.auditLog) + ' (' + count(state.auditLog) + ' entradas)')
+}
+
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON
