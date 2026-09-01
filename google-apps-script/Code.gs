@@ -44,13 +44,70 @@ function sheet_(name, headers) {
 
 function readState_() {
   const sh = sheet_(DATA_SHEET)
-  const val = sh.getRange('A1').getValue()
-  if (!val) return null
+  const last = sh.getLastRow()
+  if (last < 1) return null
+  // O estado é gravado em pedaços na coluna A (limite de 50000 chars/célula).
+  const vals = sh.getRange(1, 1, last, 1).getValues()
+  let json = ''
+  for (let i = 0; i < vals.length; i++) json += vals[i][0]
+  if (!json) return null
   try {
-    return JSON.parse(val)
+    return JSON.parse(json)
   } catch (e) {
     return null
   }
+}
+
+// Mantém no estado apenas as últimas MAX_AUDIT entradas de auditoria (o
+// histórico COMPLETO fica na aba Auditoria, append-only). Evita que o JSON do
+// estado cresça sem limite.
+var MAX_AUDIT = 1000
+function capAuditState_(state) {
+  var log = state.auditLog || []
+  if (log.length <= MAX_AUDIT) return state
+  return Object.assign({}, state, { auditLog: log.slice(log.length - MAX_AUDIT) })
+}
+
+// Grava o estado dividido em pedaços na coluna A da aba Dados, contornando o
+// limite de 50000 caracteres por célula do Google Sheets.
+function writeState_(state) {
+  const sh = sheet_(DATA_SHEET)
+  const json = JSON.stringify(state)
+  const CHUNK = 45000
+  const chunks = []
+  for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)])
+  if (chunks.length === 0) chunks.push([''])
+  sh.clearContents()
+  sh.getRange(1, 1, chunks.length, 1).setValues(chunks)
+}
+
+// Diagnóstico: rode manualmente (Executar) e veja em "Registros de execução"
+// o tamanho de cada parte do estado, para identificar o que está inchando.
+function diagnostico() {
+  var state = readState_()
+  if (!state) {
+    Logger.log('Sem estado na planilha.')
+    return
+  }
+  function len(x) {
+    return JSON.stringify(x || null).length
+  }
+  function count(x) {
+    return (x || []).length
+  }
+  Logger.log('TOTAL: ' + JSON.stringify(state).length + ' caracteres')
+  Logger.log('profiles: ' + len(state.profiles))
+  Logger.log(
+    'transactions: ' + len(state.transactions) +
+      ' (nat=' + count(state.transactions && state.transactions.nat) +
+      ', ang=' + count(state.transactions && state.transactions.ang) + ')'
+  )
+  Logger.log('orders: ' + len(state.orders) +
+    ' (nat=' + count(state.orders && state.orders.nat) +
+    ', ang=' + count(state.orders && state.orders.ang) + ')')
+  Logger.log('dividends: ' + len(state.dividends) + ' (' + count(state.dividends) + ')')
+  Logger.log('priceHistory: ' + len(state.priceHistory) + ' (' + count(state.priceHistory) + ' dias)')
+  Logger.log('auditLog: ' + len(state.auditLog) + ' (' + count(state.auditLog) + ' entradas)')
 }
 
 function json_(obj) {
@@ -86,16 +143,17 @@ function doPost(e) {
   const lock = LockService.getScriptLock()
   lock.waitLock(20000)
   try {
-    // 1) Estado completo (fonte da verdade do app)
-    sheet_(DATA_SHEET).getRange('A1').setValue(JSON.stringify(state))
-
-    // 2) Abas legíveis para conferência (reescritas a cada save)
-    writeTransactions_(state)
-    writeDividends_(state)
-    writeQuotes_(state)
-
-    // 3) Auditoria append-only (acrescenta só entradas novas, por id)
+    // 1) Auditoria COMPLETA (append-only) antes de reduzir o estado
     appendAudit_(state.auditLog || [])
+
+    // 2) Estado (com auditLog limitado), gravado em pedaços
+    const slim = capAuditState_(state)
+    writeState_(slim)
+
+    // 3) Abas legíveis para conferência (reescritas a cada save)
+    writeTransactions_(slim)
+    writeDividends_(slim)
+    writeQuotes_(slim)
 
     return json_({ ok: true, savedAt: new Date().toISOString() })
   } finally {
@@ -359,11 +417,13 @@ function runPriceTargets() {
       auditLog: r.auditLog,
       priceHistory: ph
     })
-    sheet_(DATA_SHEET).getRange('A1').setValue(JSON.stringify(newState))
-    writeTransactions_(newState)
-    writeDividends_(newState)
-    writeQuotes_(newState)
+    // Auditoria completa (append-only) antes de reduzir o estado
     appendAudit_(newState.auditLog || [])
+    var slim = capAuditState_(newState)
+    writeState_(slim)
+    writeTransactions_(slim)
+    writeDividends_(slim)
+    writeQuotes_(slim)
 
     Logger.log('Cotação ' + price + ' em ' + date + '. Executadas: ' + r.executed.length)
   } finally {

@@ -8,6 +8,14 @@ import { executeOrders } from './orders'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
+// Mantém no estado apenas as últimas N entradas de auditoria (o histórico
+// completo fica na aba Auditoria da planilha). Evita inflar localStorage/sync.
+const MAX_AUDIT = 1000
+const capAudit = (log) => {
+  const l = log || []
+  return l.length > MAX_AUDIT ? l.slice(l.length - MAX_AUDIT) : l
+}
+
 const auditEntry = (actor, action, scenario, kind, data) => ({
   id: uid(),
   ts: new Date().toISOString(),
@@ -184,7 +192,7 @@ export const useStore = create(
             dividends: s.dividends,
             orders: s.orders,
             priceHistory: s.priceHistory,
-            auditLog: s.auditLog
+            auditLog: capAudit(s.auditLog)
           },
           null,
           2
@@ -199,7 +207,7 @@ export const useStore = create(
           dividends: data.dividends || s.dividends,
           orders: { ...s.orders, ...(data.orders || {}) },
           priceHistory: data.priceHistory || s.priceHistory,
-          auditLog: data.auditLog || s.auditLog
+          auditLog: capAudit(data.auditLog || s.auditLog)
         }))
       },
       resetData: () => set(() => ({ ...initialState }))
@@ -215,7 +223,7 @@ export const useStore = create(
         orders: s.orders,
         quote: s.quote,
         priceHistory: s.priceHistory,
-        auditLog: s.auditLog,
+        auditLog: capAudit(s.auditLog),
         theme: s.theme
       })
     }
