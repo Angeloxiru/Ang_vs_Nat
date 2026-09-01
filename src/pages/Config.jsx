@@ -7,10 +7,31 @@ import { SCENARIO_META } from '../lib/initialData'
 import { toast } from '../components/Toast'
 import { brl, fmtDate, fmtDateTime, todayISO } from '../lib/format'
 
-function fileToBase64(file) {
+// Lê a imagem e reduz para uma miniatura (JPEG) antes de salvar, para não
+// inflar o estado sincronizado (o backend guarda tudo como JSON).
+function fileToBase64(file, maxSize = 256, quality = 0.8) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        try {
+          resolve(canvas.toDataURL('image/jpeg', quality))
+        } catch {
+          resolve(reader.result) // fallback (ex.: SVG): mantém o original
+        }
+      }
+      img.onerror = () => resolve(reader.result)
+      img.src = reader.result
+    }
     reader.onerror = reject
     reader.readAsDataURL(file)
   })

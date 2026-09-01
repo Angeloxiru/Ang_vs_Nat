@@ -44,13 +44,31 @@ function sheet_(name, headers) {
 
 function readState_() {
   const sh = sheet_(DATA_SHEET)
-  const val = sh.getRange('A1').getValue()
-  if (!val) return null
+  const last = sh.getLastRow()
+  if (last < 1) return null
+  // O estado é gravado em pedaços na coluna A (limite de 50000 chars/célula).
+  const vals = sh.getRange(1, 1, last, 1).getValues()
+  let json = ''
+  for (let i = 0; i < vals.length; i++) json += vals[i][0]
+  if (!json) return null
   try {
-    return JSON.parse(val)
+    return JSON.parse(json)
   } catch (e) {
     return null
   }
+}
+
+// Grava o estado dividido em pedaços na coluna A da aba Dados, contornando o
+// limite de 50000 caracteres por célula do Google Sheets.
+function writeState_(state) {
+  const sh = sheet_(DATA_SHEET)
+  const json = JSON.stringify(state)
+  const CHUNK = 45000
+  const chunks = []
+  for (let i = 0; i < json.length; i += CHUNK) chunks.push([json.slice(i, i + CHUNK)])
+  if (chunks.length === 0) chunks.push([''])
+  sh.clearContents()
+  sh.getRange(1, 1, chunks.length, 1).setValues(chunks)
 }
 
 function json_(obj) {
@@ -86,8 +104,8 @@ function doPost(e) {
   const lock = LockService.getScriptLock()
   lock.waitLock(20000)
   try {
-    // 1) Estado completo (fonte da verdade do app)
-    sheet_(DATA_SHEET).getRange('A1').setValue(JSON.stringify(state))
+    // 1) Estado completo (fonte da verdade do app), em pedaços
+    writeState_(state)
 
     // 2) Abas legíveis para conferência (reescritas a cada save)
     writeTransactions_(state)
@@ -359,7 +377,7 @@ function runPriceTargets() {
       auditLog: r.auditLog,
       priceHistory: ph
     })
-    sheet_(DATA_SHEET).getRange('A1').setValue(JSON.stringify(newState))
+    writeState_(newState)
     writeTransactions_(newState)
     writeDividends_(newState)
     writeQuotes_(newState)
